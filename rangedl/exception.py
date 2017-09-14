@@ -4,3 +4,7 @@ class SeparateHeaderError(Exception):
 
 class GetOrderError(Exception):
     pass
+
+
+class HttpResponseError(Exception):
+    pass

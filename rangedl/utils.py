@@ -1,5 +1,5 @@
 import requests
-from .exception import SeparateHeaderError, GetOrderError
+from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
 
 
 def get_length(url):
@@ -20,6 +20,9 @@ def separate_header(resp):
 
 
 def get_order(header, chunk_size):
+
+    check_status_code(header)
+
     index = header.rfind(b'Content-Range: bytes ')
 
     if index < 0:
@@ -33,3 +36,16 @@ def get_order(header, chunk_size):
 
     order = int(tmp[:index])
     return order // chunk_size
+
+
+def check_status_code(header):
+
+    index = header.find(b'\r\n')
+    request_line = header[:index]
+
+    index = request_line.find(b'HTTP/1.1 206 Partial Content')
+    if index < 0:
+        raise HttpResponseError('HttpResponseError\n' + 'Response-Line: ' + request_line.decode())
+
+    else:
+        return True
