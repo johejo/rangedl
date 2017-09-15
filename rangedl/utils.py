@@ -6,7 +6,7 @@ def get_length(url):
     hr = requests.head(url.scheme + '://' + url.netloc + url.path)
 
     try:
-        hr.headers['Accept-Range']
+        hr.headers['Accept-Ranges']
     except KeyError:
         raise AcceptRangeError('Server does not accept Range-header.')
 
