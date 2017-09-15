@@ -2,10 +2,14 @@ import selectors
 import socket
 import os
 import sys
+import gc
 from urllib.parse import urlparse
 from tqdm import tqdm
 from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
 from .utils import get_length, separate_header, get_order
+
+
+STACK_THRESHOLD = 50
 
 
 class RangeDownload(object):
@@ -92,14 +96,15 @@ class RangeDownload(object):
         self._sockets[key].sendall(message.encode())
 
     def _check_stack(self):
-        for k in self._stack.keys():
-            if self._stack[k] > self._req_num // self._num // self._magic:
-                new_key = self._re_establish_connection(k)
-                self._re_request(new_key)
+        s = sum(self._stack.values())
+        if s > STACK_THRESHOLD:
+            target_key = max(self._stack.items(), key=lambda x: x[1])[0]
+            new_key = self._re_establish_connection(target_key)
+            self._re_request(new_key)
 
-                if self._debug:
-                    print('fd', k, 'is not good connection.')
-                    print('re-establish new connection fd', new_key)
+            if self._debug:
+                print('fd', target_key, 'is not good connection.')
+                print('re-establish new connection fd', new_key)
 
     def _count_stack(self, key):
         if self._debug:
@@ -187,7 +192,7 @@ class RangeDownload(object):
                 for key, mask in events:
                     raw = key.fileobj.recv(32 * 1024)
                     self._buf[key.fd] += raw
-                    if len(raw) == 0 and self._magic < self._num:
+                    if len(raw) == 0 and self._magic < self._num // 2:
                         self._magic += 1
 
                 for key, buf in self._buf.items():
@@ -248,8 +253,6 @@ class RangeDownload(object):
                         break
 
                     self._check_stack()
-                if self._debug:
-                    print('magic', self._magic)
-
                 self._write_block(f)
+                gc.collect()
         self._fin()
