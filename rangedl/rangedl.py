@@ -8,11 +8,17 @@ from tqdm import tqdm
 from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
 from .utils import get_length, separate_header, get_order
 
+MAX_NUM_OF_CONNECTION = 10
+DEFAULT_WEIGHT = 10
+
 
 class RangeDownloader(object):
 
     def __init__(self, url, num, part_size, debug=False, progress=True):
         self._url = urlparse(url)
+        if num > MAX_NUM_OF_CONNECTION:
+            num = MAX_NUM_OF_CONNECTION
+
         self._num = num
 
         self._part_size = part_size
@@ -65,7 +71,7 @@ class RangeDownloader(object):
 
         self._progress = progress
 
-        self._STACK_THRESHOLD = self._num * 7
+        self._STACK_THRESHOLD = self._num * DEFAULT_WEIGHT
 
         if self._progress:
             self._progress_bar = None

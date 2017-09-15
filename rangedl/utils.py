@@ -40,8 +40,8 @@ def get_order(header, chunk_size):
     if index < 0:
         raise GetOrderError('Cannot get order.')
 
-    order = int(tmp[:index])
-    return order // chunk_size
+    order = int(tmp[:index]) // chunk_size
+    return order
 
 
 def check_status_code(header):
