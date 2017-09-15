@@ -1,9 +1,15 @@
 import requests
-from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
+from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError
 
 
 def get_length(url):
     hr = requests.head(url.scheme + '://' + url.netloc + url.path)
+
+    try:
+        hr.headers['Accept-Range']
+    except KeyError:
+        raise AcceptRangeError('Server does not accept Range-header.')
+
     return int(hr.headers['content-length'])
 
 

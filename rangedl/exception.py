@@ -8,3 +8,7 @@ class GetOrderError(Exception):
 
 class HttpResponseError(Exception):
     pass
+
+
+class AcceptRangeError(Exception):
+    pass
