@@ -9,9 +9,6 @@ from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
 from .utils import get_length, separate_header, get_order
 
 
-STACK_THRESHOLD = 50
-
-
 class RangeDownload(object):
 
     def __init__(self, url, num, part_size, debug=False, progress=True):
@@ -68,7 +65,7 @@ class RangeDownload(object):
 
         self._progress = progress
 
-        self._magic = 1
+        self._STACK_THRESHOLD = self._num * 7
 
         if self._progress:
             self._progress_bar = None
@@ -97,7 +94,7 @@ class RangeDownload(object):
 
     def _check_stack(self):
         s = sum(self._stack.values())
-        if s > STACK_THRESHOLD:
+        if s > self._STACK_THRESHOLD:
             target_key = max(self._stack.items(), key=lambda x: x[1])[0]
             new_key = self._re_establish_connection(target_key)
             self._re_request(new_key)
