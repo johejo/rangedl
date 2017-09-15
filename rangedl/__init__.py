@@ -1,1 +1,1 @@
-from rangedl.rangedl import RangeDownload
+from rangedl.rangedl import RangeDownloader

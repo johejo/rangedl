@@ -1,5 +1,5 @@
 import argparse
-from rangedl import RangeDownload
+from rangedl import RangeDownloader
 
 
 def set_args():
@@ -21,7 +21,7 @@ def main():
     if part_size == 0:
         part_size = 1000 * 1000
 
-    rd = RangeDownload(args.URL, args.num, part_size, args.debug, args.non_progress)
+    rd = RangeDownloader(args.URL, args.num, part_size, args.debug, args.non_progress)
     rd.download()
 
 

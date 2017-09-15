@@ -9,7 +9,7 @@ from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
 from .utils import get_length, separate_header, get_order
 
 
-class RangeDownload(object):
+class RangeDownloader(object):
 
     def __init__(self, url, num, part_size, debug=False, progress=True):
         self._url = urlparse(url)
