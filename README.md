@@ -19,6 +19,7 @@ If you want to simply use GNU Wget or cURL as a download tool from the command l
 ```
 $git clone https://github.com/johejo/rangedl.git
 $cd rangedl
+$pip install -r requirements.txt
 $python http_download.py http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-desktop-amd64.iso -n 10 -s 1
 ```
 
