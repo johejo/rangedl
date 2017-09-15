@@ -22,7 +22,7 @@ $cd rangedl
 $python http_download.py http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-desktop-amd64.iso -n 10 -s 1
 ```
 
-####Sample
+### Sample
 ```python
 from rangedl import RangeDownloader
 
