@@ -174,6 +174,9 @@ class RangeDownload(object):
     def print_result(self):
         print('\nTotal file size', self._total, 'bytes')
 
+    def set_threshold(self, val):
+        self._STACK_THRESHOLD = val * self._num
+
     def download(self):
         if self._progress:
             self._progress_bar = tqdm(total=self._length, file=sys.stdout)
@@ -189,8 +192,6 @@ class RangeDownload(object):
                 for key, mask in events:
                     raw = key.fileobj.recv(32 * 1024)
                     self._buf[key.fd] += raw
-                    if len(raw) == 0 and self._magic < self._num // 2:
-                        self._magic += 1
 
                 for key, buf in self._buf.items():
                     if len(buf) >= self._reminder:
