@@ -4,18 +4,22 @@ import os
 import sys
 import gc
 from urllib.parse import urlparse
+from logging import getLogger, NullHandler
 from tqdm import tqdm
 from .exception import SeparateHeaderError, GetOrderError, HttpResponseError
 from .utils import get_length, separate_header, get_order
 
 MAX_NUM_OF_CONNECTION = 10
 DEFAULT_WEIGHT = 10
+local_logger = getLogger(__name__)
+local_logger.addHandler(NullHandler())
 
 
 class RangeDownloader(object):
 
-    def __init__(self, url, num, part_size, debug=False, progress=True):
+    def __init__(self, url, num, part_size, progress=True, *, logger=local_logger):
         self._url = urlparse(url)
+        self.logger = logger
         if num > MAX_NUM_OF_CONNECTION:
             num = MAX_NUM_OF_CONNECTION
 
@@ -25,8 +29,6 @@ class RangeDownloader(object):
 
         if self._part_size == 0:
             self._part_size = 1000 * 1000
-
-        self._debug = debug
 
         self._length = get_length(self._url)
 
@@ -79,51 +81,44 @@ class RangeDownloader(object):
     def _initial_request(self):
         for key in self._sockets.keys():
             self._request(key, 'GET',
-                          'Range: bytes={0}-{1}'.format(self._begin, self._begin + self._chunk_size - 1))
+                          headers='Range: bytes={0}-{1}'.format(self._begin, self._begin + self._chunk_size - 1))
             self._begin += self._chunk_size
             self._i += 1
 
-    def _request(self, key, method, *headers):
+    def _request(self, key, method, *, headers, logger=None):
+        logger = logger or local_logger
         message = '{0} {1} HTTP/1.1\r\nHost: {2}\r\n'.format(method, self._url.path, self._url.hostname)
         if headers is not None:
-            for header in headers:
-                message += '{0}\r\n'.format(header)
+            # for header in headers:
+            #     message += '{0}\r\n'.format(header)
+            message += headers + '\r\n'
 
         message += '\r\n'
         self._request_buf[key] = message
 
-        if self._debug:
-            print("Send request part", self._i, self._begin, "to", headers, "fd", self._sockets[key].fileno(),
-                  'send times', self._i, '\n')
+        # logger.debug('Send request part', self._i, self._begin, "to", headers, "fd", self._sockets[key].fileno(),
+        #              'send times', self._i, '\n')
 
         self._sockets[key].sendall(message.encode())
 
-    def _check_stack(self):
+    def _check_stack(self, *, logger=None):
+        logger = logger or local_logger
         s = sum(self._stack.values())
         if s > self._STACK_THRESHOLD:
             target_key = max(self._stack.items(), key=lambda x: x[1])[0]
             new_key = self._re_establish_connection(target_key)
             self._re_request(new_key)
+            # logger.debug('fd', target_key, 'is not good connection.', 're-establish new connection fd', new_key)
 
-            if self._debug:
-                print('fd', target_key, 'is not good connection.')
-                print('re-establish new connection fd', new_key)
-
-    def _count_stack(self, key):
-        if self._debug:
-            print('fd', '\t', 'stack')
-
+    def _count_stack(self, key, logger=None):
+        logger = logger or local_logger
         for k in self._stack.keys():
             if k != key:
                 self._stack[k] += 1
             else:
                 self._stack[k] = 0
 
-            if self._debug:
-                print(k, '\t', self._stack[k])
-
-        if self._debug:
-            print()
+            # logger.debug(k, '\t', self._stack[k])
 
     def _re_establish_connection(self, old_key):
         new_socket = socket.create_connection(self._address)
@@ -145,16 +140,15 @@ class RangeDownloader(object):
     def _re_request(self, key):
         self._sockets[key].sendall(self._request_buf[key].encode())
 
-    def _write_block(self, file):
+    def _write_block(self, file, *, logger=None):
+        logger = logger or local_logger
         current = self._wi
         while current < len(self._write_list):
             if self._write_list[current] != b'':
                 file.write(self._write_list[current])
                 self._write_list[current] = b''
-
-                if self._debug:
-                    print('part', current, 'has written to the file', '\n')
                 self._wi += 1
+                # logger.debug('part', current, 'has written to the file', '\n')
             else:
                 break
             current += 1
@@ -164,10 +158,11 @@ class RangeDownloader(object):
             s.close()
 
         self._sel.close()
+        
         if self._progress:
             self._progress_bar.close()
-        if self._debug:
-            self.print_result()
+
+        self.print_result()
 
     def print_info(self):
         print('URL', self._url.scheme + '://' + self._url.netloc + self._url.path + '\n'
@@ -183,11 +178,13 @@ class RangeDownloader(object):
     def set_threshold(self, val):
         self._STACK_THRESHOLD = val * self._num
 
-    def download(self):
+    def download(self, *, logger=None):
+        logger = logger or local_logger
+
+        self.print_info()
+
         if self._progress:
             self._progress_bar = tqdm(total=self._length, file=sys.stdout)
-        if self._debug:
-            self.print_info()
 
         self._initial_request()
 
@@ -215,6 +212,7 @@ class RangeDownloader(object):
                             if len(body) < self._chunk_size:
                                 continue
 
+                        order = 0
                         try:
                             order = get_order(header, self._chunk_size)
 
@@ -230,9 +228,8 @@ class RangeDownloader(object):
                         if self._progress:
                             self._progress_bar.update(len(body))
 
-                        if self._debug:
-                            print('Received part', order, 'from fd', key, len(body), 'total', self._total,
-                                  'receive times', self._ri, '\n')
+                        # logger.debug('Received part', order, 'from fd', key, len(body), 'total', self._total,
+                        #              'receive times', self._ri, '\n')
 
                         self._write_list[order] = body
                         self._total += len(body)
@@ -244,11 +241,11 @@ class RangeDownloader(object):
                             if self._i == self._req_num and self._reminder != 0:
                                 self._last_fd = key
                                 self._request(key, 'GET',
-                                              'Range: bytes={0}-{1}'
+                                              headers='Range: bytes={0}-{1}'
                                               .format(self._begin, self._begin + self._reminder - 1))
                             else:
                                 self._request(key, 'GET',
-                                              'Range: bytes={0}-{1}'
+                                              headers='Range: bytes={0}-{1}'
                                               .format(self._begin, self._begin + self._chunk_size - 1))
                             self._begin += self._chunk_size
                             self._i += 1
