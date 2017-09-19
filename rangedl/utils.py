@@ -1,9 +1,12 @@
 import requests
-from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError
+from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, NotFoundError
 
 
 def get_length(url):
     hr = requests.head(url.scheme + '://' + url.netloc + url.path)
+
+    if hr.status_code != 200:
+        raise NotFoundError('File not found. ' + str(hr.status_code))
 
     try:
         hr.headers['Accept-Ranges']
@@ -26,7 +29,6 @@ def separate_header(resp):
 
 
 def get_order(header, chunk_size):
-
     check_status_code(header)
 
     index = header.rfind(b'Content-Range: bytes ')
@@ -45,7 +47,6 @@ def get_order(header, chunk_size):
 
 
 def check_status_code(header):
-
     index = header.find(b'\r\n')
     request_line = header[:index]
 

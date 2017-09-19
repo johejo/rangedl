@@ -12,3 +12,7 @@ class HttpResponseError(Exception):
 
 class AcceptRangeError(Exception):
     pass
+
+
+class NotFoundError(Exception):
+    pass

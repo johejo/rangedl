@@ -1,5 +1,9 @@
 import argparse
 from rangedl import RangeDownloader
+from logging import basicConfig, getLogger, DEBUG
+
+logger = getLogger(__name__)
+basicConfig(level=DEBUG)
 
 
 def set_args():
@@ -20,7 +24,7 @@ def main():
     if part_size == 0:
         part_size = 1000 * 1000
 
-    rd = RangeDownloader(args.URL, args.num, part_size, args.non_progress)
+    rd = RangeDownloader(args.URL, args.num, part_size, args.non_progress, logger=logger)
     rd.download()
 
 
