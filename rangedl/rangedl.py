@@ -228,6 +228,7 @@ class RangeDownloader(object):
 
                         if self._progress:
                             self._progress_bar.update(len(body))
+                            print('', file=sys.stderr)
 
                         logger.debug('Received part ' + str(order) +
                                      ' from fd ' + str(key) +

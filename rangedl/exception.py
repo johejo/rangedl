@@ -14,5 +14,5 @@ class AcceptRangeError(Exception):
     pass
 
 
-class NotFoundError(Exception):
+class HeadResponseError(Exception):
     pass

@@ -1,12 +1,12 @@
 import requests
-from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, NotFoundError
+from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, HeadResponseError
 
 
 def get_length(url):
     hr = requests.head(url.scheme + '://' + url.netloc + url.path)
 
     if hr.status_code != 200:
-        raise NotFoundError('File not found. ' + str(hr.status_code))
+        raise HeadResponseError(str(hr.status_code))
 
     try:
         hr.headers['Accept-Ranges']
