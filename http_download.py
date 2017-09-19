@@ -10,6 +10,7 @@ def set_args():
     parser.add_argument('-sk', '--size-kb', nargs='?', default=0, const=0, help='split size (KB)', type=int)
     parser.add_argument('-sg', '--size-gb', nargs='?', default=0, const=0, help='split size (GB)', type=int)
     parser.add_argument('-p', '--non-progress', action='store_false', help='disable progress bar using \'tqdm\'')
+    parser.add_argument('-d', '--debug', action='store_true', help='debug option')
     args = parser.parse_args()
     return args
 
@@ -20,7 +21,7 @@ def main():
     if part_size == 0:
         part_size = 1000 * 1000
 
-    rd = RangeDownloader(args.URL, args.num, part_size, args.non_progress)
+    rd = RangeDownloader(args.URL, args.num, part_size, args.non_progress, args.debug)
     rd.download()
 
 
