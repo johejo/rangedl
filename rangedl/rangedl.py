@@ -181,7 +181,7 @@ class RangeDownloader(object):
         self.print_result()
 
     def print_info(self):
-        self._logger.debug(' URL' + self._url.scheme + '://' + self._url.netloc + self._url.path + '\n' +
+        self._logger.debug(' URL ' + self._url.scheme + '://' + self._url.netloc + self._url.path + '\n' +
                            'file size' + str(self._length) + 'bytes' + '\n' +
                            'connection num' + str(self._num) + '\n' +
                            'chunk_size' + str(self._chunk_size) + ' bytes' + '\n' +
