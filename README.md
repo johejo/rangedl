@@ -19,18 +19,18 @@ See requirements.txt.
 $ pip install git+http://github.com/johejo/rangedl.git
 ```
 
-or
+and
 
-If you want to simply use GNU Wget or cURL as a download tool from the command line, execute the attached http_download.py.
-
+If you want to use it as a command line tool like GNU Wget or cURL, please run the attached http_download.py.
 ```bash
 $ git clone https://github.com/johejo/rangedl.git
 $ cd rangedl
-$ pip install -r requirements.txt
 $ python http_download.py http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-desktop-amd64.iso -n 10 -s 1
 ```
 
 ### Sample
+Use from Python
+
 ```python
 from rangedl import RangeDownloader
 
