@@ -23,9 +23,7 @@ and
 
 If you want to use it as a command line tool like GNU Wget or cURL, please run the attached http_download.py.
 ```bash
-$ git clone https://github.com/johejo/rangedl.git
-$ cd rangedl
-$ python http_download.py http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-desktop-amd64.iso -n 10 -s 1
+$ rangedl http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-server-amd64.iso -n 10 -s 1
 ```
 
 ### Sample
