@@ -3,6 +3,7 @@ import socket
 import os
 import sys
 import gc
+import statistics as st
 from urllib.parse import urlparse
 from logging import getLogger, NullHandler, StreamHandler, DEBUG
 from tqdm import tqdm
@@ -86,6 +87,8 @@ class RangeDownloader(object):
 
         self._write_list = [b'' for i in range(self._req_num + 1)]
 
+        self._num_of_blocks_at_writing = []
+
         self._progress = progress
 
         self._STACK_THRESHOLD = self._num * DEFAULT_WEIGHT
@@ -159,15 +162,20 @@ class RangeDownloader(object):
     def _write_block(self, file, *, logger=None):
         logger = logger or self._logger
         current = self._wi
+        count = 0
         while current < len(self._write_list):
             if self._write_list[current] != b'':
                 file.write(self._write_list[current])
+                count += 1
                 self._write_list[current] = b''
                 self._wi += 1
                 logger.debug('part ' + str(current) + ' has written to the file')
             else:
                 break
             current += 1
+
+        if count != 0:
+            self._num_of_blocks_at_writing.append(count)
 
     def _fin(self):
         for s in self._sockets.values():
@@ -181,15 +189,22 @@ class RangeDownloader(object):
         self.print_result()
 
     def print_info(self):
-        self._logger.debug(' URL ' + self._url.scheme + '://' + self._url.netloc + self._url.path + '\n' +
-                           'file size' + str(self._length) + 'bytes' + '\n' +
+        self._logger.debug('URL ' + self._url.scheme + '://' + self._url.netloc + self._url.path + '\n' +
+                           'file size ' + str(self._length) + ' bytes' + '\n' +
                            'connection num' + str(self._num) + '\n' +
                            'chunk_size' + str(self._chunk_size) + ' bytes' + '\n' +
                            'req_num' + str(self._req_num + 1) + '\n'
                            )
 
     def print_result(self):
-        self._logger.debug('\nTotal file size' + str(self._total) + 'bytes')
+        self._logger.debug('\n' +
+                           'Total file size ' + str(self._total) + ' bytes' + '\n' +
+                           'Number of blocks at writing' + '\n' +
+                           str(self._num_of_blocks_at_writing) + '\n' +
+                           'MAX : ' + str(max(self._num_of_blocks_at_writing)) + '\n' +
+                           'AVE : ' + str(st.mean(self._num_of_blocks_at_writing)) + '\n' +
+                           'SD : ' + str(st.stdev(self._num_of_blocks_at_writing)) + '\n'
+                           )
 
     def set_threshold(self, val):
         self._STACK_THRESHOLD = val * self._num
