@@ -4,7 +4,7 @@ from rangedl import RangeDownloader
 
 def set_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('URL', help='target URL')
+    parser.add_argument('URLs', nargs='*', help='target URLs')
     parser.add_argument('-n', '--num', nargs='?', default=5, const=5, help='num of TCP connection', type=int)
     parser.add_argument('-s', '--size', nargs='?', default=0, const=0, help='split size (MB)', type=int)
     parser.add_argument('-sk', '--size-kb', nargs='?', default=0, const=0, help='split size (KB)', type=int)
@@ -21,7 +21,7 @@ def main():
     if part_size == 0:
         part_size = 1000 * 1000
 
-    rd = RangeDownloader(args.URL, args.num, part_size, args.non_progress, args.debug)
+    rd = RangeDownloader(args.URLs, args.num, part_size, args.non_progress, args.debug)
     rd.download()
 
 

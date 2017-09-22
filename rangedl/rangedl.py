@@ -17,8 +17,8 @@ local_logger.addHandler(NullHandler())
 
 
 class RangeDownloader(object):
-    def __init__(self, url, num, part_size, progress=True, debug=False):
-        self._url = urlparse(url)
+    def __init__(self, urls, num, part_size, progress=True, debug=False):
+        self._urls = [urlparse(url) for url in urls]
         self._debug = debug
         self._logger = local_logger
 
@@ -40,7 +40,7 @@ class RangeDownloader(object):
             self._part_size = 1000 * 1000
 
         try:
-            self._length = get_length(self._url)
+            self._length = get_length(self._urls[0])
 
         except AcceptRangeError:
             exit(1)
@@ -57,20 +57,20 @@ class RangeDownloader(object):
         self._req_num = self._length // self._chunk_size
         self._reminder = self._length % self._chunk_size
 
-        if self._url.port is None:
+        if self._urls[0].port is None:
             self._port = '80'
         else:
-            self._port = self._url.port
+            self._port = self._urls[0].port
 
-        self._address = (socket.gethostbyname(self._url.hostname), self._port)
+        self._address = (socket.gethostbyname(self._urls[0].hostname), self._port)
         self._sockets = {}
         for i in range(self._num):
             sock = socket.create_connection(self._address)
-            sock.setblocking(0)
+            sock.setblocking(False)
             self._sockets[sock.fileno()] = sock
 
         self._sel = selectors.DefaultSelector()
-        self._filename = os.path.basename(self._url.path)
+        self._filename = os.path.basename(self._urls[0].path)
         f = open(self._filename, 'wb')
         f.close()
 
@@ -105,7 +105,7 @@ class RangeDownloader(object):
 
     def _request(self, key, method, *, headers=None, logger=None):
         logger = logger or self._logger
-        message = '{0} {1} HTTP/1.1\r\nHost: {2}\r\n'.format(method, self._url.path, self._url.hostname)
+        message = '{0} {1} HTTP/1.1\r\nHost: {2}\r\n'.format(method, self._urls[0].path, self._urls[0].hostname)
         if headers is not None:
             message += headers + '\r\n'
 
@@ -189,7 +189,7 @@ class RangeDownloader(object):
         self.print_result()
 
     def print_info(self):
-        self._logger.debug('URL ' + self._url.scheme + '://' + self._url.netloc + self._url.path + '\n' +
+        self._logger.debug('URL ' + self._urls[0].scheme + '://' + self._urls[0].netloc + self._urls[0].path + '\n' +
                            'file size ' + str(self._length) + ' bytes' + '\n' +
                            'connection num' + str(self._num) + '\n' +
                            'chunk_size' + str(self._chunk_size) + ' bytes' + '\n' +
