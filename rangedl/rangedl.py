@@ -6,7 +6,7 @@ import gc
 from urllib.parse import urlparse
 from logging import getLogger, NullHandler, StreamHandler, DEBUG
 from tqdm import tqdm
-from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, HeadResponseError, AcceptRangeError
+from .exceptions import SeparateHeaderError, GetOrderError, HttpResponseError, HeadResponseError, AcceptRangeError
 from .utils import get_length, separate_header, get_order
 
 MAX_NUM_OF_CONNECTION = 10
@@ -254,20 +254,22 @@ class RangeDownloader(object):
 
                         self._write_list[order] = body
                         self._total += len(body)
+                        if self._total >= self._length:
+                            break
+
                         self._ri += 1
                         self._buf[key] = b''
                         self._count_stack(key)
 
-                        if self._i <= self._req_num:
-                            if self._i == self._req_num and self._reminder != 0:
-                                self._last_fd = key
-                                self._request(key, 'GET',
-                                              headers='Range: bytes={0}-{1}'
-                                              .format(self._begin, self._begin + self._reminder - 1))
-                            else:
-                                self._request(key, 'GET',
-                                              headers='Range: bytes={0}-{1}'
-                                              .format(self._begin, self._begin + self._chunk_size - 1))
+                        if self._i >= self._req_num and self._reminder != 0:
+                            self._last_fd = key
+                            self._request(key, 'GET',
+                                          headers='Range: bytes={0}-{1}'
+                                          .format(self._begin, self._begin + self._reminder - 1))
+                        else:
+                            self._request(key, 'GET',
+                                          headers='Range: bytes={0}-{1}'
+                                          .format(self._begin, self._begin + self._chunk_size - 1))
                             self._begin += self._chunk_size
                             self._i += 1
 

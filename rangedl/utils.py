@@ -1,5 +1,5 @@
 import requests
-from .exception import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, HeadResponseError
+from .exceptions import SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, HeadResponseError
 
 
 def get_length(url):
