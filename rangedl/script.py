@@ -1,4 +1,5 @@
 import argparse
+import sys
 from rangedl import RangeDownloader
 
 
@@ -17,6 +18,10 @@ def set_args():
 
 def main():
     args = set_args()
+    if len(sys.argv) == 1:
+        print('rangedl: try \'rangedl -h\'', file=sys.stderr)
+        exit(1)
+
     part_size = (args.size * 1000 + args.size_kb + args.size_gb * 1000 * 1000) * 1000
     if part_size == 0:
         part_size = 1000 * 1000

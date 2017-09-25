@@ -3,6 +3,7 @@ import socket
 import os
 import sys
 import gc
+import time
 import statistics as st
 from urllib.parse import urlparse
 from logging import getLogger, NullHandler, StreamHandler, DEBUG
@@ -21,6 +22,8 @@ class RangeDownloader(object):
         self._urls = [urlparse(url) for url in urls]
         self._debug = debug
         self._logger = local_logger
+        self._start_time = 0
+        self._end_time = 0
 
         if self._debug:
             handler = StreamHandler()
@@ -74,12 +77,12 @@ class RangeDownloader(object):
         f = open(self._filename, 'wb')
         f.close()
 
-        self._buf = {}
+        self._sock_buf = {}
         self._stack = {}
         self._request_buf = {}
         for s in self._sockets.values():
             self._sel.register(s, selectors.EVENT_READ)
-            self._buf[s.fileno()] = bytearray()
+            self._sock_buf[s.fileno()] = bytearray()
             self._stack[s.fileno()] = 0
             self._request_buf[s.fileno()] = ''
 
@@ -145,14 +148,14 @@ class RangeDownloader(object):
         new_key = new_socket.fileno()
 
         self._sockets[new_key] = new_socket
-        self._buf[new_key] = bytearray()
+        self._sock_buf[new_key] = bytearray()
         self._stack[new_key] = 0
         self._request_buf[new_key] = self._request_buf[old_key]
         self._sel.register(new_socket, selectors.EVENT_READ)
 
         self._sel.unregister(self._sockets[old_key])
         self._sockets[old_key].close()
-        del self._sockets[old_key], self._buf[old_key], self._stack[old_key], self._request_buf[old_key]
+        del self._sockets[old_key], self._sock_buf[old_key], self._stack[old_key], self._request_buf[old_key]
 
         return new_key
 
@@ -178,6 +181,9 @@ class RangeDownloader(object):
             self._num_of_blocks_at_writing.append(count)
 
     def _fin(self):
+
+        self._end_time = time.time()
+
         for s in self._sockets.values():
             s.close()
 
@@ -199,6 +205,9 @@ class RangeDownloader(object):
     def print_result(self):
         self._logger.debug('\n' +
                            'Total file size ' + str(self._total) + ' bytes' + '\n' +
+                           'Time ' + str(self._end_time - self._start_time) + ' sec' + '\n' +
+                           'Throughput ' +
+                           str(self._total / (self._end_time - self._start_time) * 8 / 1000 / 1000) + ' Mb/s' + '\n' +
                            'Number of blocks at writing' + '\n' +
                            str(self._num_of_blocks_at_writing) + '\n' +
                            'MAX : ' + str(max(self._num_of_blocks_at_writing)) + '\n' +
@@ -217,6 +226,7 @@ class RangeDownloader(object):
         if self._progress:
             self._progress_bar = tqdm(total=self._length)
 
+        self._start_time = time.time()
         self._initial_request()
 
         with open(self._filename, 'ab') as f:
@@ -225,9 +235,9 @@ class RangeDownloader(object):
 
                 for key, mask in events:
                     raw = key.fileobj.recv(32 * 1024)
-                    self._buf[key.fd] += raw
+                    self._sock_buf[key.fd] += raw
 
-                for key, buf in self._buf.items():
+                for key, buf in self._sock_buf.items():
                     if len(buf) >= self._reminder:
                         try:
                             header, body = separate_header(buf)
@@ -273,7 +283,7 @@ class RangeDownloader(object):
                             break
 
                         self._ri += 1
-                        self._buf[key] = b''
+                        self._sock_buf[key] = b''
                         self._count_stack(key)
 
                         if self._i >= self._req_num and self._reminder != 0:
