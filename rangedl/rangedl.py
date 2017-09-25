@@ -13,6 +13,10 @@ from .utils import get_length, separate_header, get_order
 
 MAX_NUM_OF_CONNECTION = 10
 DEFAULT_WEIGHT = 10
+DEFAULT_TIMEOUT = 5
+DEFAULT_ALGORITHM = 'stack_count'
+TIMEOUT_ALGORITHM = 'timeout'
+
 local_logger = getLogger(__name__)
 local_logger.addHandler(NullHandler())
 
@@ -22,8 +26,6 @@ class RangeDownloader(object):
         self._urls = [urlparse(url) for url in urls]
         self._debug = debug
         self._logger = local_logger
-        self._start_time = 0
-        self._end_time = 0
 
         if self._debug:
             handler = StreamHandler()
@@ -50,6 +52,9 @@ class RangeDownloader(object):
 
         except HeadResponseError:
             exit(1)
+        
+        self._start_time = 0
+        self._end_time = 0
 
         self._check_size = self._length // self._num
         if self._check_size > self._part_size:
@@ -82,19 +87,21 @@ class RangeDownloader(object):
         self._request_buf = {}
         for s in self._sockets.values():
             self._sel.register(s, selectors.EVENT_READ)
-            self._sock_buf[s.fileno()] = bytearray()
+            tmp = {'data': bytearray(), 'timeout': 0, 'timeout_begin': time.time()}
+            self._sock_buf[s.fileno()] = tmp
             self._stack[s.fileno()] = 0
             self._request_buf[s.fileno()] = ''
 
         self._begin = self._i = self._total = self._ri = self._wi = self._last_fd = 0
 
         self._write_list = [b'' for i in range(self._req_num + 1)]
-
         self._num_of_blocks_at_writing = []
 
         self._progress = progress
 
         self._STACK_THRESHOLD = self._num * DEFAULT_WEIGHT
+        self._TIMEOUT = DEFAULT_TIMEOUT
+        self._ALGORITHM = DEFAULT_ALGORITHM
 
         if self._progress:
             self._progress_bar = None
@@ -115,10 +122,11 @@ class RangeDownloader(object):
         message += '\r\n'
         self._request_buf[key] = message
 
-        logger.debug('Send request part ' + str(self._i) +
-                     ' from ' + str(self._begin) + " to " + str(headers) +
-                     ' fd ' + str(self._sockets[key].fileno()) +
-                     ' send times ' + str(self._i))
+        logger.debug('Send request part ' + str(self._i) + '\n' +
+                     'fd ' + str(self._sockets[key].fileno()) +
+                     ' send times ' + str(self._i) + '\n' +
+                     message
+                     )
 
         self._sockets[key].sendall(message.encode())
 
@@ -148,7 +156,8 @@ class RangeDownloader(object):
         new_key = new_socket.fileno()
 
         self._sockets[new_key] = new_socket
-        self._sock_buf[new_key] = bytearray()
+        tmp = {'data': bytearray(), 'timeout': 0, 'timeout_begin': time.time()}
+        self._sock_buf[new_key] = tmp
         self._stack[new_key] = 0
         self._request_buf[new_key] = self._request_buf[old_key]
         self._sel.register(new_socket, selectors.EVENT_READ)
@@ -159,8 +168,14 @@ class RangeDownloader(object):
 
         return new_key
 
-    def _re_request(self, key):
+    def _re_request(self, key, *, logger=None):
+        logger = logger or self._logger
         self._sockets[key].sendall(self._request_buf[key].encode())
+        logger.debug('Send re-request part ' + str(self._i) + '\n' +
+                     'fd ' + str(self._sockets[key].fileno()) +
+                     ' send times ' + str(self._i) + '\n' +
+                     self._request_buf[key]
+                     )
 
     def _write_block(self, file, *, logger=None):
         logger = logger or self._logger
@@ -181,7 +196,6 @@ class RangeDownloader(object):
             self._num_of_blocks_at_writing.append(count)
 
     def _fin(self):
-
         self._end_time = time.time()
 
         for s in self._sockets.values():
@@ -193,6 +207,24 @@ class RangeDownloader(object):
             self._progress_bar.close()
 
         self.print_result()
+
+    def _check_timeout(self, *, logger=None):
+        logger = logger or self._logger
+        for key, buf in self._sock_buf.items():
+            if buf['timeout'] > self._TIMEOUT:
+                target_key = key
+                new_key = self._re_establish_connection(target_key)
+                logger.debug('KEY ' + str(key) + ' TIMEOUT ' + str(buf['timeout']))
+                logger.debug('fd ' + str(target_key) + ' is not good connection. ' +
+                             ' re-establish new connection fd ' + str(new_key))
+
+                self._re_request(new_key)
+
+    def _duplicate_request_func(self):
+        if self._ALGORITHM == DEFAULT_ALGORITHM:
+            self._check_stack()
+        elif self._ALGORITHM == TIMEOUT_ALGORITHM:
+            self._check_timeout()
 
     def print_info(self):
         self._logger.debug('URL ' + self._urls[0].scheme + '://' + self._urls[0].netloc + self._urls[0].path + '\n' +
@@ -218,6 +250,10 @@ class RangeDownloader(object):
     def set_threshold(self, val):
         self._STACK_THRESHOLD = val * self._num
 
+    def set_timeout_algorithm(self, timeout=DEFAULT_TIMEOUT):
+        self._ALGORITHM = TIMEOUT_ALGORITHM
+        self._TIMEOUT = timeout
+
     def download(self, *, logger=None):
         logger = logger or self._logger
 
@@ -235,12 +271,12 @@ class RangeDownloader(object):
 
                 for key, mask in events:
                     raw = key.fileobj.recv(32 * 1024)
-                    self._sock_buf[key.fd] += raw
+                    self._sock_buf[key.fd]['data'] += raw
 
                 for key, buf in self._sock_buf.items():
-                    if len(buf) >= self._reminder:
+                    if len(buf['data']) >= self._reminder:
                         try:
-                            header, body = separate_header(buf)
+                            header, body = separate_header(buf['data'])
 
                         except SeparateHeaderError:
                             continue
@@ -271,11 +307,15 @@ class RangeDownloader(object):
                             if self._debug:
                                 print('', file=sys.stderr)
 
+                        self._sock_buf[key]['timeout_begin'] = time.time()
+                        logger.debug('ZERO ' + str(key) + ' ' + str(self._sock_buf[key]['timeout']))
+
                         logger.debug('Received part ' + str(order) +
                                      ' from fd ' + str(key) +
                                      ' len body ' + str(len(body)) +
                                      ' total ' + str(self._total) +
-                                     ' receive times ' + str(self._ri))
+                                     ' receive times ' + str(self._ri) + '\n' +
+                                     str(header.decode()))
 
                         self._write_list[order] = body
                         self._total += len(body)
@@ -283,7 +323,7 @@ class RangeDownloader(object):
                             break
 
                         self._ri += 1
-                        self._sock_buf[key] = b''
+                        self._sock_buf[key]['data'] = b''
                         self._count_stack(key)
 
                         if self._i >= self._req_num and self._reminder != 0:
@@ -298,10 +338,13 @@ class RangeDownloader(object):
                             self._begin += self._chunk_size
                             self._i += 1
 
+                    else:
+                        self._sock_buf[key]['timeout'] = time.time() - self._sock_buf[key]['timeout_begin']
+
                     if self._total >= self._length:
                         break
 
-                    self._check_stack()
+                    self._duplicate_request_func()
                 self._write_block(f)
                 gc.collect()
         self._fin()
