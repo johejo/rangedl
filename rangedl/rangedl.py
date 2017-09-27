@@ -186,7 +186,8 @@ class RangeDownloader(object):
             logger.debug('fd ' + str(k) + ' ' + self._sockets[k]['url'].hostname + ' stack ' + str(self._stacks[k]))
 
     def _re_establish_connection(self, old_key):
-        new_socket = addr2sock(self._sockets[old_key]['address'])
+        max_throughput_key = max(self._sock_buf, key=lambda x: self._sock_buf[x]['throughput'])
+        new_socket = addr2sock(self._sockets[max_throughput_key]['address'])
         new_key = new_socket.fileno()
 
         self._sockets[new_key] = {'socket': new_socket,
@@ -323,20 +324,12 @@ class RangeDownloader(object):
                     self._sock_buf[key.fd]['data'] += raw
 
                 for key, buf in self._sock_buf.items():
-                    if len(buf['data']) >= self._reminder:
+                    if len(buf['data']) > 0:
                         try:
                             header, body = separate_header(buf['data'])
 
                         except SeparateHeaderError:
                             continue
-
-                        if key == self._last_fd:
-                            if len(body) < self._reminder:
-                                continue
-
-                        else:
-                            if len(body) < self._chunk_size:
-                                continue
 
                         order = 0
                         try:
@@ -347,9 +340,18 @@ class RangeDownloader(object):
 
                         except HttpResponseError as e:
                             print('\n' + str(e), file=sys.stderr)
+                            self.print_info()
                             f.close()
                             os.remove(self._filename)
                             exit(1)
+
+                        if key == self._last_fd:
+                            if len(body) < self._reminder:
+                                continue
+
+                        else:
+                            if len(body) < self._chunk_size:
+                                continue
 
                         if self._progress:
                             self._progress_bar.update(len(body))
