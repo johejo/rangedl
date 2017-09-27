@@ -16,3 +16,7 @@ class AcceptRangeError(Exception):
 
 class HeadResponseError(Exception):
     pass
+
+
+class FileSizeError(Exception):
+    pass
