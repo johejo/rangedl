@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='rangedl',
-      version='1.0.0',
+      version='1.0.1',
       license='MIT',
       description='HTTP Range Downloader',
       author='Mitsuo Heijo',
