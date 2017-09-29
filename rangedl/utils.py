@@ -1,14 +1,17 @@
 import requests
 import socket
 from .exceptions import (
-    SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, HeadResponseError
+    SeparateHeaderError, GetOrderError, HttpResponseError, AcceptRangeError, HeadResponseError, RedirectionError
 )
 
 
 def get_length(url):
     hr = requests.head(url.scheme + '://' + url.netloc + url.path)
 
-    if hr.status_code != 200:
+    if hr.status_code == 302 or hr.status_code == 303 or hr.status_code == 307:
+        raise RedirectionError((hr.headers['Location']))
+
+    elif hr.status_code != 200:
         raise HeadResponseError('STATUS CODE ' + str(hr.status_code))
 
     try:

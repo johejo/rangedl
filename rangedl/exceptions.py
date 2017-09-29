@@ -18,5 +18,5 @@ class HeadResponseError(Exception):
     pass
 
 
-class FileSizeError(Exception):
+class RedirectionError(Exception):
     pass

@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from logging import getLogger, NullHandler, StreamHandler, DEBUG
 from tqdm import tqdm
 from .exceptions import (
-    SeparateHeaderError, GetOrderError, HttpResponseError, HeadResponseError, AcceptRangeError, FileSizeError
+    SeparateHeaderError, GetOrderError, HttpResponseError, HeadResponseError, AcceptRangeError, RedirectionError
 )
 from .utils import (
     get_length, get_order, separate_header, addr2sock, map_all
@@ -51,24 +51,38 @@ class RangeDownloader(object):
         if self._part_size == 0:
             self._part_size = 1000 * 1000
 
-        try:
-            length_list = [get_length(url) for url in urls]
-            if map_all(length_list) is False:
-                raise FileSizeError('The size of the target file differs for each mirror')
-            self._length = length_list[0]
+        length_list = []
+        i = 0
+        while i < len(urls):
+            url = urls[i]
+            try:
+                length = get_length(url)
+            except RedirectionError as e:
+                print('Target file \n' +
+                      url.scheme + '://' + url.netloc + url.path + '\n' +
+                      'is redirected to \n' +
+                      str(e), file=sys.stderr
+                      )
+                urls.remove(url)
+                urls.append(urlparse(str(e)))
 
-        except AcceptRangeError as e:
-            print(e, file=sys.stderr)
+            except AcceptRangeError as e:
+                print(e, file=sys.stderr)
+                exit(1)
+
+            except HeadResponseError as e:
+                print(e, file=sys.stderr)
+                exit(1)
+            else:
+                length_list.append(length)
+                i += 1
+
+        if map_all(length_list) is False:
+            print('The size of the target file differs for each mirror', file=sys.stderr)
             exit(1)
 
-        except HeadResponseError as e:
-            print(e, file=sys.stderr)
-            exit(1)
+        self._length = length_list[0]
 
-        except FileSizeError as e:
-            print(e, file=sys.stderr)
-            exit(1)
-        
         self._start_time = 0
         self._end_time = 0
 
@@ -144,8 +158,7 @@ class RangeDownloader(object):
             self._begin += self._chunk_size
             self._i += 1
 
-    def _request(self, key, method, *, headers=None, logger=None):
-        logger = logger or self._logger
+    def _set_message(self, key, method, *, headers=None):
         message = '{0} {1} HTTP/1.1\r\nHost: {2}\r\n'.format(method,
                                                              self._sockets[key]['url'].path,
                                                              self._sockets[key]['url'].hostname
@@ -155,6 +168,11 @@ class RangeDownloader(object):
 
         message += '\r\n'
         self._request_buf[key] = message
+        return message
+
+    def _request(self, key, method, *, headers=None, logger=None):
+        logger = logger or self._logger
+        message = self._set_message(key, method, headers=headers)
 
         logger.debug('Send request part ' + str(self._i) + '\n' +
                      'fd ' + str(key) + ' send times ' + str(self._i) + '\n' +
@@ -172,7 +190,7 @@ class RangeDownloader(object):
     def _check_stack_v2(self):
         ave = st.mean(self._stacks.values())
         for key, stack in self._stacks.items():
-            if stack >= ave * self._v2_weight:
+            if stack > ave * self._v2_weight:
                 self._duplicate_request_func(key=key)
 
     def _count_stack(self, key, logger=None):
@@ -191,8 +209,8 @@ class RangeDownloader(object):
         new_key = new_socket.fileno()
 
         self._sockets[new_key] = {'socket': new_socket,
-                                  'address': self._sockets[old_key]['address'],
-                                  'url': self._sockets[old_key]['url']
+                                  'address': self._sockets[max_throughput_key]['address'],
+                                  'url': self._sockets[max_throughput_key]['url']
                                   }
         self._sock_buf[new_key] = {'data': bytearray(), 
                                    'timeout': 0, 
@@ -202,7 +220,10 @@ class RangeDownloader(object):
                                    'throughput': 0
                                    }
         self._stacks[new_key] = 0
-        self._request_buf[new_key] = self._request_buf[old_key]
+        tmp = self._request_buf[old_key]
+        range_header = tmp[tmp.rfind('Range'):tmp.rfind('\r\n\r\n')]
+        message = self._set_message(key=new_key, method='GET', headers=range_header)
+        self._request_buf[new_key] = message
         self._sel.register(new_socket, selectors.EVENT_READ)
 
         self._sel.unregister(self._sockets[old_key]['socket'])
@@ -331,7 +352,6 @@ class RangeDownloader(object):
                         except SeparateHeaderError:
                             continue
 
-                        order = 0
                         try:
                             order = get_order(header, self._chunk_size)
 
