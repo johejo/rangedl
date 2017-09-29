@@ -146,7 +146,7 @@ class RangeDownloader(object):
         self._algorithm = None
         self._v1_threshold = None
         self._v2_weight = None
-        self.set_stack_v1()
+        self.set_stack_v2()
 
         if self._progress:
             self._progress_bar = None

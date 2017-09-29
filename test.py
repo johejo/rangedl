@@ -27,7 +27,6 @@ def main():
         part_size = 1000 * 1000
 
     rd = RangeDownloader(args.URLs, args.num, part_size, args.non_progress, args.debug)
-    # rd.set_timeout_algorithm()
     rd.set_stack_v2()
     rd.download()
 
