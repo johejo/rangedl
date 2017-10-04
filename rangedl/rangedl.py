@@ -240,20 +240,21 @@ class RangeDownloader(object):
                      self._request_buf[key]
                      )
 
-    def _write_block(self, file, *, logger=None):
+    def _write_block(self, *, logger=None):
         logger = logger or self._logger
         current = self._wi
         count = 0
-        while current < len(self._write_list):
-            if self._write_list[current] != b'':
-                file.write(self._write_list[current])
-                count += 1
-                self._write_list[current] = b''
-                self._wi += 1
-                logger.debug('part ' + str(current) + ' has written to the file')
-            else:
-                break
-            current += 1
+        with open(self._filename, 'ab') as file:
+            while current < len(self._write_list):
+                if self._write_list[current] != b'':
+                    file.write(self._write_list[current])
+                    count += 1
+                    self._write_list[current] = b''
+                    self._wi += 1
+                    logger.debug('part ' + str(current) + ' has written to the file')
+                else:
+                    break
+                current += 1
 
         if count != 0:
             self._num_of_blocks_at_writing.append(count)
@@ -336,94 +337,94 @@ class RangeDownloader(object):
         self._start_time = time.time()
         self._initial_request()
 
-        with open(self._filename, 'ab') as f:
-            while self._total < self._length:
-                events = self._sel.select()
+        while self._total < self._length:
+            events = self._sel.select()
 
-                for key, mask in events:
-                    raw = key.fileobj.recv(32 * 1024)
-                    self._sock_buf[key.fd]['data'] += raw
+            for key, mask in events:
+                raw = key.fileobj.recv(32 * 1024)
+                self._sock_buf[key.fd]['data'] += raw
 
-                for key, buf in self._sock_buf.items():
-                    if len(buf['data']) > 0:
-                        try:
-                            header, body = separate_header(buf['data'])
+            for key, buf in self._sock_buf.items():
+                if len(buf['data']) > 0:
+                    try:
+                        header, body = separate_header(buf['data'])
 
-                        except SeparateHeaderError:
+                    except SeparateHeaderError:
+                        continue
+
+                    try:
+                        order = get_order(header, self._chunk_size)
+
+                    except GetOrderError:
+                        continue
+
+                    except HttpResponseError as e:
+                        print('\n' + str(e), file=sys.stderr)
+                        self.print_info()
+                        os.remove(self._filename)
+                        exit(1)
+
+                    if key == self._last_fd:
+                        if len(body) < self._reminder:
                             continue
-
-                        try:
-                            order = get_order(header, self._chunk_size)
-
-                        except GetOrderError:
-                            continue
-
-                        except HttpResponseError as e:
-                            print('\n' + str(e), file=sys.stderr)
-                            self.print_info()
-                            f.close()
-                            os.remove(self._filename)
-                            exit(1)
-
-                        if key == self._last_fd:
-                            if len(body) < self._reminder:
-                                continue
-
-                        else:
-                            if len(body) < self._chunk_size:
-                                continue
-
-                        if self._progress:
-                            self._progress_bar.update(len(body))
-                            if self._debug:
-                                print('', file=sys.stderr)
-
-                        self._sock_buf[key]['total'] += len(body)
-                        self._sock_buf[key]['throughput'] = buf['total'] / (time.time() - buf['thp_begin'])
-
-                        self._sock_buf[key]['time_begin'] = time.time()
-                        logger.debug('TIMEOUT ' + str(key) + ' ' + str(self._sock_buf[key]['timeout']))
-
-                        logger.debug('Received part ' + str(order) +
-                                     ' from fd ' + str(key) +
-                                     ' len body ' + str(len(body)) +
-                                     ' total ' + str(self._total) +
-                                     ' receive times ' + str(self._ri) + '\n' +
-                                     str(header.decode()))
-
-                        self._write_list[order] = body
-                        self._total += len(body)
-                        if self._total >= self._length:
-                            break
-
-                        self._ri += 1
-                        self._sock_buf[key]['data'] = b''
-                        self._count_stack(key)
-
-                        if self._i >= self._req_num and self._reminder != 0:
-                            self._last_fd = key
-                            self._request(key, 'GET',
-                                          headers='Range: bytes={0}-{1}'
-                                          .format(self._begin, self._begin + self._reminder - 1))
-                        else:
-                            self._request(key, 'GET',
-                                          headers='Range: bytes={0}-{1}'
-                                          .format(self._begin, self._begin + self._chunk_size - 1))
-                            self._begin += self._chunk_size
-                            self._i += 1
 
                     else:
-                        self._sock_buf[key]['timeout'] = time.time() - self._sock_buf[key]['time_begin']
+                        if len(body) < self._chunk_size:
+                            continue
 
+                    if self._progress:
+                        self._progress_bar.update(len(body))
+                        if self._debug:
+                            print('', file=sys.stderr)
+
+                    self._sock_buf[key]['total'] += len(body)
+                    # self._sock_buf[key]['throughput'] = buf['total'] / (time.time() - buf['thp_begin'])
+
+                    self._sock_buf[key]['time_begin'] = time.time()
+                    logger.debug('TIMEOUT ' + str(key) + ' ' + str(self._sock_buf[key]['timeout']))
+
+                    logger.debug('Received part ' + str(order) +
+                                 ' from fd ' + str(key) +
+                                 ' len body ' + str(len(body)) +
+                                 ' total ' + str(self._total) +
+                                 ' receive times ' + str(self._ri) + '\n' +
+                                 str(header.decode()))
+
+                    self._write_list[order] = body
+                    self._total += len(body)
                     if self._total >= self._length:
                         break
 
-                    if self._algorithm == STACK_ALGORITHM_V1:
-                        self._check_stack_v1()
-                    elif self._algorithm == STACK_ALGORITHM_V2:
-                        self._check_stack_v2()
-                    elif self._algorithm == TIMEOUT_ALGORITHM:
-                        self._check_timeout()
-                self._write_block(f)
-                gc.collect()
+                    self._ri += 1
+                    self._sock_buf[key]['data'] = b''
+                    self._count_stack(key)
+
+                    if self._i >= self._req_num and self._reminder != 0:
+                        self._last_fd = key
+                        self._request(key, 'GET',
+                                      headers='Range: bytes={0}-{1}'
+                                      .format(self._begin, self._begin + self._reminder - 1))
+                    else:
+                        self._request(key, 'GET',
+                                      headers='Range: bytes={0}-{1}'
+                                      .format(self._begin, self._begin + self._chunk_size - 1))
+                        self._begin += self._chunk_size
+                        self._i += 1
+
+                else:
+                    self._sock_buf[key]['timeout'] = time.time() - self._sock_buf[key]['time_begin']
+
+                self._sock_buf[key]['throughput'] = buf['total'] / (time.time() - buf['thp_begin'])
+
+                if self._total >= self._length:
+                    break
+
+                if self._algorithm == STACK_ALGORITHM_V1:
+                    self._check_stack_v1()
+                elif self._algorithm == STACK_ALGORITHM_V2:
+                    self._check_stack_v2()
+                elif self._algorithm == TIMEOUT_ALGORITHM:
+                    self._check_timeout()
+            self._write_block()
+            gc.collect()
         self._fin()
