@@ -302,7 +302,7 @@ class RangeDownloader(object):
                            'Time ' + str(self._end_time - self._start_time) + ' sec' + '\n' +
                            'Throughput ' +
                            str(self._total / (self._end_time - self._start_time) * 8 / 1000 / 1000) + ' Mb/s' + '\n' +
-                           'Number of blocks at writing' + '\n' +
+                           'Number of blocks when writing' + '\n' +
                            str(self._num_of_blocks_at_writing) + '\n' +
                            'MAX : ' + str(max(self._num_of_blocks_at_writing)) + '\n' +
                            'AVE : ' + str(st.mean(self._num_of_blocks_at_writing)) + '\n' +
