@@ -37,7 +37,10 @@ def separate_header(resp):
 def get_order(header, chunk_size):
     check_status_code(header)
 
-    index = header.rfind(b'Content-Range: bytes ')
+    index = header.rfind(b'content-range: bytes ')
+
+    if index < 0:
+        index = header.rfind(b'Content-Range: bytes ')
 
     if index < 0:
         raise GetOrderError('Cannot get order.')
