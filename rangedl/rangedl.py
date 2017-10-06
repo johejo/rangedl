@@ -415,7 +415,10 @@ class RangeDownloader(object):
                 else:
                     self._sock_buf[key]['timeout'] = time.time() - self._sock_buf[key]['time_begin']
 
-                self._sock_buf[key]['throughput'] = buf['total'] / (time.time() - buf['thp_begin'])
+                try:
+                    self._sock_buf[key]['throughput'] = buf['total'] / (time.time() - buf['thp_begin'])
+                except ZeroDivisionError:
+                    continue
 
                 if self._total >= self._length:
                     break
