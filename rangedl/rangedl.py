@@ -102,12 +102,12 @@ class RangeDownloader(object):
 
         self._sockets = {}
 
-        conn_num_per_a_address = int(self._connection_num // len(urls))
+        self._conn_num_per_a_address = int(self._connection_num // len(urls))
         conn_reminder = int(self._connection_num % len(urls))
 
         for url in urls:
             address = (socket.gethostbyname(url.hostname), port)
-            for i in range(conn_num_per_a_address):
+            for i in range(self._conn_num_per_a_address):
                 sock = addr2sock(address)
                 self._sockets[sock.fileno()] = {'socket': sock, 'address': address, 'url': url}
             if conn_reminder > 0:
@@ -322,9 +322,9 @@ class RangeDownloader(object):
         self._algorithm = TIMEOUT_ALGORITHM
         self._timeout = timeout
 
-    def set_stack_v2(self, weight=V2_DEFAULT_WEIGHT):
+    def set_stack_v2(self):
         self._algorithm = STACK_ALGORITHM_V2
-        self._v2_weight = weight
+        self._v2_weight = self._conn_num_per_a_address * 2
 
     def download(self, *, logger=None):
         logger = logger or self._logger
@@ -408,8 +408,9 @@ class RangeDownloader(object):
                         self._request(key, 'GET',
                                       headers='Range: bytes={0}-{1}'
                                       .format(self._begin, self._begin + self._chunk_size - 1))
-                        self._begin += self._chunk_size
-                        self._i += 1
+                        if self._begin + self._chunk_size < self._length:
+                            self._begin += self._chunk_size
+                            self._i += 1
 
                 else:
                     self._sock_buf[key]['timeout'] = time.time() - self._sock_buf[key]['time_begin']
