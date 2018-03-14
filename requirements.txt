@@ -1,2 +1,4 @@
+yarl>=1.1.0
 tqdm>=4.15.0
 requests>=2.18.4
+-e git+https://github.com/johejo/aiosphttp

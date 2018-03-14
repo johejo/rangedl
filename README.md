@@ -21,9 +21,16 @@ $ pip install git+http://github.com/johejo/rangedl.git
 
 and
 
-If you want to use it as a command line tool like GNU Wget or cURL, please run the attached http_download.py.
+If you want to use it as a command line tool like GNU Wget, please run the attached script.
+
+old version
 ```bash
-$ rangedl http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-server-amd64.iso -n 10 -s 1
+$ rangedl http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-server-amd64.iso -n 10
+```
+
+new version
+```bash
+$ rngdl http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04/ubuntu-17.04-server-amd64.iso -n 10
 ```
 
 ### Sample
@@ -38,6 +45,3 @@ rd = RangeDownloader(url='http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/17.04
                      )
 rd.download()
 ```
-
-## Other
-Please wait for API document and more information.
